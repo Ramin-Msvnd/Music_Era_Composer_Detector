@@ -2,6 +2,8 @@ import librosa
 import numpy
 import joblib
 import sklearn
+
+import soundfile as sf
 import os
 
 # def get_subdirectories(a_dir):
@@ -12,6 +14,12 @@ def getDirectory():
     return (os.path.abspath(os.path.dirname(__file__)))
 
 def get_sample_array(dataset_dir, samp_rate):
+
+    # y, sr = sf.read(dataset_dir, dtype='float32')
+    # x, _ = librosa.core.resample(y, sr, samp_rate)
+    x, _ = librosa.load(dataset_dir, sr=None, duration=60.0)
+    audio_numpy = numpy.array(x)
+    return audio_numpy
     # path_of_audios = librosa.util.find_files(dataset_dir + "/" + folder_name)
     #path_of_audios = librosa.util.find_files(dataset_dir)
     
@@ -19,7 +27,15 @@ def get_sample_array(dataset_dir, samp_rate):
     # labels = []
     
     # ds = pandas.read_csv("ds_labeled_with_midi.csv")
-    x, _ = librosa.load(dataset_dir, sr=None, duration=60.0)
+
+    # def get_sample_array(dataset_dir, samp_rate):
+    #     x, _ = librosa.load(dataset_dir, sr=samp_rate, duration=60.0, res_type='kaiser_fast')
+    #     audio_numpy = np.array(x)
+    #     return audio_numpy
+    # data, sr = sf.read(dataset_dir)
+    # x, sr = librosa.load(dataset_dir, sr=samp_rate, duration=60.0, mono=True, res_type='kaiser_fast', dtype='float32')
+
+    # x, _ = librosa.load(dataset_dir, sr=samp_rate, duration=60.0, res_type='kaiser_fast')
     
     """
     for audio in path_of_audios:
@@ -37,9 +53,9 @@ def get_sample_array(dataset_dir, samp_rate):
         
     """
         
-    audio_numpy = numpy.array(x)
-
-    return audio_numpy
+    # audio_numpy = numpy.array(x)
+    #
+    # return audio_numpy
 
 
 def extract_features(signal, sample_rate, frame_size, hop_size):

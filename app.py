@@ -1,3 +1,6 @@
+import tempfile
+
+import botocore
 from flask import Flask, render_template, session, request, json, url_for, redirect, flash
 from flask import send_from_directory
 import pymysql
@@ -15,6 +18,10 @@ import Credentials
 import boto3
 import pytz
 import secrets
+from pydub import AudioSegment
+import soundfile as sf
+import io
+import os
 import os
 import joblib
 import ML_Model.Era_Classifier  as era_classifier
@@ -29,9 +36,12 @@ from sendgrid.helpers.mail import Mail
 from flask import Flask, request, redirect, url_for, render_template
 
 era_model_file = era_classifier.getDirectory() + "/joblib_model_era.pkl"
-era_model = era_classifier.joblib.load(era_model_file)
+# era_model = era_classifier.joblib.load(era_model_file)
 composer_model_file = composer_classifier.getDirectory() + "/joblib_model_composer.pkl"
-composer_model = composer_classifier.joblib.load(composer_model_file)
+
+era = joblib.load(era_model_file)
+composer = joblib.load(composer_model_file)
+# composer_model = composer_classifier.joblib.load(composer_model_file)
 
 
 
@@ -316,7 +326,18 @@ def reset_password():
 
         return render_template('reset_password.html', token=token)
 
+def get_file_from_s3(bucket_name, key):
+    # create a temporary file to download the S3 file to
+    temp_file = tempfile.NamedTemporaryFile(delete=False)
 
+    # download the S3 file to the temporary file
+    s3.download_file(bucket_name, key, temp_file.name)
+
+    # reset the file pointer to the beginning of the file
+    temp_file.seek(0)
+
+    # return the temporary file object
+    return temp_file
 @app.route('/music-files')
 def music_files():
     success_msg = request.args.get('success_msg')
@@ -325,7 +346,14 @@ def music_files():
     folder_name = session['username']
 
     # list objects in the user's folder
-    response = s3.list_objects_v2(Bucket=bucket_name, Prefix=f"{folder_name}/")
+    # response = s3.list_objects_v2(Bucket=bucket_name, Prefix=f"{folder_name}/")
+
+    # create a Config object with signature version set to 's3v4'
+    s3_config = botocore.config.Config(signature_version='s3v4')
+    s3_client = boto3.client('s3', config=s3_config)
+
+    # list objects in the user's folder
+    response = s3_client.list_objects_v2(Bucket=bucket_name, Prefix=f"{folder_name}/")
 
     # if the user's folder is empty, return an empty list of check_results
     if 'Contents' not in response:
@@ -345,11 +373,28 @@ def music_files():
 
             formatted_date = datetime.strftime(creation_date, "%H:%M:%S %m-%d-%Y")
 
+            import time
+            start = time.time()
+
+            # fetch the file from S3
+            response = s3.get_object(Bucket=bucket_name, Key=key)
+            print(time.time()-start)
+            file_contents = response['Body'].read()
+
+            # write the contents of the S3 object to a temporary file
+            with tempfile.NamedTemporaryFile(delete=False) as tmp_file:
+                tmp_file.write(file_contents)
+
+            composer_predicted, composer_confidence = composer_classifier.predict(tmp_file.name, composer)
+            era_predicted, era_confidence = era_classifier.predict(tmp_file.name, era)
+
+            title = os.path.basename(key)
+
+            # s3file = get_file_from_s3(bucket_name, key)
             check_result = {
-                'title': key[len(folder_name + '/'):],
-                # remove the folder name prefix from the object key to get the title
-                'composer': '',
-                'era': '',
+                'title': title,  # use os.path.basename to get the filename
+                'composer': composer_predicted,
+                'era': era_predicted,
                 'id': '',
                 'checked_at': formatted_date,
                 'download_link': download_link,
@@ -359,8 +404,6 @@ def music_files():
             checkResults.append(check_result)
 
     return render_template('music-history.html', check_results=checkResults, success_msg=success_msg)
-
-
 
 
 @app.route('/delete/<path:key>')
@@ -378,25 +421,40 @@ def upload():
     else:
         # cursor = db.cursor()
         file = request.files['audio']
-        buffer = io.BytesIO() # Converting flask file storage to io buffer to pass to the librosa library
-        file.save(buffer)
-        buffer.seek(0)
-        t = datetime.now().microsecond
-        checked_at = str(datetime.now())
-        fileName = session['username'] + '_' + str(t) + '_' + file.filename
-        full_name = os.path.join(UPLOAD_FOLDER, fileName)
-        file.save(full_name)
-        era, era_accuracy = era_classifier.predict(buffer, era_model)
-        composer, composer_accuracy = composer_classifier.predict(buffer, composer_model)
-        era_accuracy= "{:.2f}".format(100.0 * era_accuracy)
-        composer_accuracy ="{:.2f}".format(100.0 * composer_accuracy)
-        
-        with open(full_name, 'rb') as f:
-            object_key = session['username'] + "/" + fileName
+        file_contents = file.read()
 
-            s3.put_object(Bucket=bucket_name, Key=object_key, Body=f)
-        return render_template('predict.html', image_file_name=fileName, era=era, era_accuracy=era_accuracy, composer=composer, composer_accuracy=composer_accuracy)
+        # Extract audio information
+        audio = AudioSegment.from_file(io.BytesIO(file_contents), format=file.content_type.split('/')[1])
+        duration = audio.duration_seconds
+        sample_rate = audio.frame_rate
+        channels = audio.channels
 
+        # Upload audio file to S3
+        # uploaded_file = io.BytesIO(file_contents)
+        key = '{}/{}'.format(session['username'], file.filename)
+        s3.upload_fileobj(io.BytesIO(file_contents), bucket_name, key)
+
+        # Format audio information for display
+        duration_str = '{:.2f}'.format(duration)
+        sample_rate_str = '{:,}'.format(sample_rate)
+        channels_str = 'Stereo' if channels == 2 else 'Mono'
+
+        composer_predicted, composer_accuracy = composer_classifier.predict(io.BytesIO(file_contents), composer)
+        era_predicted, era_accuracy= era_classifier.predict(io.BytesIO(file_contents), era)
+
+        # Display up to 2 decimal places
+        era_accuracy = round(era_accuracy, 2)
+        composer_accuracy = round(composer_accuracy, 2)
+
+        return render_template('predict.html',
+                               filename=file.filename,
+                               duration=duration_str,
+                               sample_rate=sample_rate_str,
+                               channels=channels_str,
+                               era=era_predicted,
+                               composer=composer_predicted,
+                               era_accuracy=composer_accuracy,
+                               composer_accuracy=era_accuracy)
 '''
 @app.route('/uploads/<filename>')
 def send_file(filename):

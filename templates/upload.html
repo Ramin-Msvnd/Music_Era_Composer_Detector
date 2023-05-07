@@ -33,21 +33,26 @@
 
         <img style="margin: auto; text-align: center; margin-top: 20px;  text-transform: uppercase; width: 600px"
              src="{{ url_for('static', filename='Composers.jpeg') }}"/>
-        <form action="/upload" method="post" enctype="multipart/form-data"
-              style="margin-top: 100px; width: 80%; text-align: center; margin-left: 100px;" onsubmit="showloading()">
-
+                <form action="/upload" method="post" enctype="multipart/form-data"
+              style="margin-top: 100px; width: 80%; text-align: center; margin-left: 100px;"
+              onsubmit="showLoadingSpinner()">
             <h4>Upload Music files here:</h4>
-
-            <span class="btn btn-default btn-file" style="margin-top:700px; margin:auto; color: black">
-          <input type="file" name="audio" accept="audio/mp3, audio/wav" style="margin-top:20px;">
-      </span><br><br>
+            <div id="loading-spinner-container" style="display: none;">
+                <i class="fa fa-spinner fa-spin" style="font-size: 36px;"></i>
+            </div>
+            <span class="btn btn-default btn-file" style="color: black">
+                <input type="file" name="audio" accept="audio/mp3, audio/wav" style="margin-top:20px;">
+            </span><br><br>
             <input type="submit" value="Upload" class="btn btn-primary">
-            {#        <input type="file" name="file" accept="audio/mp3, audio/wav">#}
-            {#        <input type="submit" value="Upload">#}
         </form>
 
-
     </header>
+
+    <script>
+        function showLoadingSpinner() {
+            document.getElementById("loading-spinner-container").style.display = "block";
+        }
+    </script>
 
 
 {% endblock %}
