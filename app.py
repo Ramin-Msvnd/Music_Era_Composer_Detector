@@ -440,11 +440,11 @@ def upload():
         channels_str = 'Stereo' if channels == 2 else 'Mono'
 
         composer_predicted, composer_accuracy = composer_classifier.predict(io.BytesIO(file_contents), composer)
-        era_predicted, era_accuracy= era_classifier.predict(io.BytesIO(file_contents), era)
+        era_predicted, era_accuracy = era_classifier.predict(io.BytesIO(file_contents), era)
 
         # Display up to 2 decimal places
-        era_accuracy = round(era_accuracy, 2)
-        composer_accuracy = round(composer_accuracy, 2)
+        era_accuracy = round(era_accuracy, 2) * 100
+        composer_accuracy = round(composer_accuracy, 2) * 100
 
         return render_template('predict.html',
                                filename=file.filename,
@@ -453,8 +453,8 @@ def upload():
                                channels=channels_str,
                                era=era_predicted,
                                composer=composer_predicted,
-                               era_accuracy=composer_accuracy,
-                               composer_accuracy=era_accuracy)
+                               era_accuracy=era_accuracy,
+                               composer_accuracy=composer_accuracy)
 '''
 @app.route('/uploads/<filename>')
 def send_file(filename):
