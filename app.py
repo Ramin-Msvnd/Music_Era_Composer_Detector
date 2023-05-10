@@ -443,8 +443,8 @@ def upload():
         era_predicted, era_accuracy = era_classifier.predict(io.BytesIO(file_contents), era)
 
         # Display up to 2 decimal places
-        era_accuracy = round(era_accuracy, 2) * 100
-        composer_accuracy = round(composer_accuracy, 2) * 100
+        era_accuracy = era_accuracy * 100
+        composer_accuracy = (composer_accuracy * 100)
 
         return render_template('predict.html',
                                filename=file.filename,
@@ -453,8 +453,8 @@ def upload():
                                channels=channels_str,
                                era=era_predicted,
                                composer=composer_predicted,
-                               era_accuracy=era_accuracy,
-                               composer_accuracy=composer_accuracy)
+                               era_accuracy='{:.2f}'.format(era_accuracy),
+                               composer_accuracy='{:.2f}'.format(composer_accuracy))
 '''
 @app.route('/uploads/<filename>')
 def send_file(filename):
